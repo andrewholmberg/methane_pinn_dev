@@ -43,7 +43,6 @@ class PINN:
         return loc_temp, wind_temp
 
 
-
     def source_points(self,n,sigma):
         torch.empty(0,4)
         source_inputs_ls = torch.empty(0,4)
