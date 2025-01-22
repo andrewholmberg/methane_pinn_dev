@@ -11,7 +11,7 @@ class PINN:
         self.l_scale = 1
         self.t_scale = 1
     
-    def set_location(self,source_locs, max_vals, source_values = None):
+    def set_location(self, source_locs, max_vals, source_values = None):
         self.source_locs = source_locs
         #figure out if there should be 3 individual scales, or just 1 across x,y,z
         self.l_scale = 1#max(max_vals[1:])
