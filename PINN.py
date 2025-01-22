@@ -5,7 +5,7 @@ import pandas as pd
 class PINN:
     def __init__(self,hidden_structure):
         self.spatial_dim = 3
-        self.net = Net(self.spatial_dim,hidden_structure)
+        self.net = Net(self.spatial_dim, hidden_structure)
         self.collocation_points = None
         self.initial_condition_points = None
         self.l_scale = 1
@@ -13,9 +13,10 @@ class PINN:
     
     def set_location(self,source_locs, max_vals, source_values = None):
         self.source_locs = source_locs
+        #figure out if there should be 3 individual scales, or just 1 across x,y,z
+        self.l_scale = 1#max(max_vals[1:])
         self.source_locs_scaled = source_locs / self.l_scale
-        self.l_scale = max(max_vals[1:])
-        self.t_scale = max_vals[0]
+        self.t_scale = 1#max_vals[0]
         if source_values != None:
             assert len(source_values) == len(source_values)
             self.q = source_values
