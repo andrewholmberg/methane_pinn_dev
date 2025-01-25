@@ -121,7 +121,8 @@ class PINN:
         negative_loss = torch.mean((torch.abs(u) - u)**2)
         # compute loss
 
-        pde_loss = torch.mean((u_x[:,0] + velocity_term - 0.1 * laplace_term - (source_term) )**2) 
+        kappa = 1e-1
+        pde_loss = torch.mean( (u_x[:,0] + velocity_term - kappa * laplace_term - (source_term) )**2) 
         # pde_loss = torch.mean((u_x[:,0]  - 0.1 * laplace_term - (source_term) )**2) 
         total_loss = pde_loss
         # print(torch.mean(velocity_term**2),torch.mean(source_term**2),torch.mean(u_x[:,0]**2))

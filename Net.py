@@ -23,24 +23,21 @@ class Net(torch.nn.Module):
 
         self.relu = torch.nn.ReLU()
         self.tanh = torch.nn.Tanh()
+        self.leaky_relu = torch.nn.LeakyReLU(0.1)
 
     def forward(self, input_tensor):
         #t is the last column in the input tensor
         t = input_tensor[:,0:1]
     
-        xt = self.relu(self.hidden[0](input_tensor))
+        xt = self.leaky_relu(self.hidden[0](input_tensor))
         for i in range(1,len(self.hidden)-2):
-            xt = self.tanh(self.hidden[i](xt))
+            xt = xt + self.leaky_relu(self.hidden[i](xt))
         xt = xt + self.tanh(self.hidden[-2](xt))
         xt = self.hidden[-1](xt)
         # ensures at t=0, the output is zero
-
-
-
         # ensures at t=0, the output is zero
         xt = t*xt
-
-        return torch.abs(xt)
+        return xt
     '''
     # create loss for  \|u_t - u_xx = 0\|
 
