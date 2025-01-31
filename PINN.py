@@ -81,12 +81,12 @@ class PINN:
         return source_inputs_ls.float()
     
 
-    def loss_function(self, tx, uv, source_term = None, scaled = False):
+    def loss_function(self, tx, wind_vector, source_term = None, scaled = False):
         # assumes v has shape (1, spatial_dim)
         # assumes source_loc has shape (1, spatial_dim)
         # assumes source_value is a scalar
         if scaled == False:
-            tx, uv = self.scale_tensor(tx, uv)
+            tx, wind_vector = self.scale_tensor(tx, wind_vector)
 
         batch_size = tx.shape[0]
         spatial_dim =self.spatial_dim
@@ -109,14 +109,19 @@ class PINN:
         assert u_xx.shape == (batch_size, spatial_dim+1)
 
         laplace_term = torch.sum(u_xx[:,1:], dim=1).view(batch_size, 1)
-        velocity_term = torch.sum(uv*u_x[:,1:3], dim=1).view(batch_size, 1)
+        assert wind_vector.shape == u_x[:,1:3].shape
+        velocity_term = torch.sum(wind_vector*u_x[:,1:3], dim=1).view(batch_size, 1)
 
         # print(u_x[:,:2])
         assert laplace_term.shape == (batch_size, 1)
         assert velocity_term.shape == (batch_size, 1)
         # assert u_t.shape == (batch_size, 1)
 
-        source_term = torch.tensor(np.exp(self.source_mixture.score_samples(tx[:,1:].detach().cpu().numpy())))
+        source_term = torch.tensor(np.exp(self.source_mixture.score_samples(tx[:,1:].detach().cpu().numpy()))).view(batch_size,1)
+        # print('source_term.shape = ', source_term.shape)
+        # print('velocity_term.shape = ', velocity_term.shape)
+        # print('velocity_term + source_term shape = ', (velocity_term + source_term).shape)
+        assert source_term.shape == (batch_size, 1)
 
         negative_loss = torch.mean((torch.abs(u) - u)**2)
         # compute loss

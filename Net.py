@@ -23,7 +23,7 @@ class Net(torch.nn.Module):
 
         self.relu = torch.nn.ReLU()
         self.tanh = torch.nn.Tanh()
-        self.leaky_relu = torch.nn.LeakyReLU(0.1)
+        self.leaky_relu = torch.nn.LeakyReLU(negative_slope=0.1)
 
     def forward(self, input_tensor):
         #t is the last column in the input tensor
