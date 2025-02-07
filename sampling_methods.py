@@ -5,7 +5,7 @@ def spread_sample_source(source_locs, source_quant, radii, n_outer, max_iters, c
     for iter in range(current_iter+1):
         iter_prop = iter/max_iters
         radii_temp = np.array(radii)*iter_prop
-        ls=np.concatenate((ls,sample_points_on_ellipsoid(radii_temp,source_locs[2],n_outer*iter//max_iters+1)))
+        ls=np.concatenate((ls,sample_points_on_ellipsoid(radii_temp,source_locs[1],n_outer*iter//max_iters+1)))
     # print(len(ls),len(np.tile(ls,t_points)))
     return np.column_stack([np.tile(np.linspace(0,t_max,t_points),len(ls)),np.tile(ls,(t_points,1))])
 

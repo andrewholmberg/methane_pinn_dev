@@ -21,7 +21,7 @@ class PINN:
         self.t_scale = 1#max_vals[0]
         self.t_max = max_vals[0]
 
-        if source_values != None:
+        if source_values is not None:
             assert len(source_values) == len(source_values)
             self.q = source_values
             self.source_mixture = GaussianMixture(len(source_locs),covariance_type='full')
@@ -130,7 +130,7 @@ class PINN:
         # assert negative_loss.shape == (1,1)
         # compute loss
         assert u_x[:,0:1].shape == velocity_term.shape
-        kappa = 1e-2
+        kappa = 1e-1
         # print(u_x[:,0:1].shape ,velocity_term.shape , laplace_term.shape , source_term.shape)
 
         assert u_x[:,0:1].shape ==velocity_term.shape == laplace_term.shape == source_term.shape
