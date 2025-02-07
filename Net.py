@@ -1,12 +1,16 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from torch import nn
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available():
     torch.set_default_tensor_type(torch.cuda.FloatTensor)
 # create a multilayer perceptron
-
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
 class Net(torch.nn.Module):
 
     def __init__(self,spatial_dim, hidden_structure:list):
@@ -20,7 +24,7 @@ class Net(torch.nn.Module):
         for i in range(1,len(hidden_structure)):
             self.hidden.append(torch.nn.Linear(hidden_structure[i-1], hidden_structure[i]))
         self.hidden.append(torch.nn.Linear(hidden_structure[-1],1))
-
+        self.apply(init_weights)
         self.relu = torch.nn.ReLU()
         self.tanh = torch.nn.Tanh()
         self.leaky_relu = torch.nn.LeakyReLU(negative_slope=0.1)

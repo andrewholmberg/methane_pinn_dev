@@ -1,4 +1,5 @@
 from Net import Net
+# from Net_1 import Net
 import torch
 import numpy as np
 import pandas as pd
@@ -18,7 +19,7 @@ class PINN:
         self.l_scale = 1#max(max_vals[1:])
         self.source_locs_scaled = source_locs / self.l_scale
         self.t_scale = 1#max_vals[0]
-        self.t_max = self.t_scale
+        self.t_max = max_vals[0]
 
         if source_values != None:
             assert len(source_values) == len(source_values)
@@ -44,7 +45,7 @@ class PINN:
             temp[:,0] = temp[:,0]/self.t_scale
             return self.net(temp)
 
-    def scale_tensor(self,loc_tensor, wind_tensor = None):
+    def scale_tensor(self, loc_tensor, wind_tensor = None):
         loc_temp = loc_tensor.clone()
         loc_temp[:,1:] = loc_temp[:,1:]/self.l_scale
         loc_temp[:,0] = loc_temp[:,0]/self.t_scale
@@ -103,6 +104,7 @@ class PINN:
         u_xx = torch.autograd.grad(outputs=u_x, inputs=tx, grad_outputs=torch.ones_like(u_x), create_graph=True, retain_graph=True, allow_unused=True)[0]
         
         assert u.shape == (batch_size,1)
+
         # u_t = torch.autograd.grad(outputs=u, inputs=t, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True)[0]
 
         assert u_x.shape == (batch_size, spatial_dim+1)
@@ -118,18 +120,24 @@ class PINN:
         # assert u_t.shape == (batch_size, 1)
 
         source_term = torch.tensor(np.exp(self.source_mixture.score_samples(tx[:,1:].detach().cpu().numpy()))).view(batch_size,1)
+        # print(source_term[0],tx[0])
         # print('source_term.shape = ', source_term.shape)
         # print('velocity_term.shape = ', velocity_term.shape)
         # print('velocity_term + source_term shape = ', (velocity_term + source_term).shape)
         assert source_term.shape == (batch_size, 1)
 
         negative_loss = torch.mean((torch.abs(u) - u)**2)
+        # assert negative_loss.shape == (1,1)
         # compute loss
+        assert u_x[:,0:1].shape == velocity_term.shape
+        kappa = 1e-2
+        # print(u_x[:,0:1].shape ,velocity_term.shape , laplace_term.shape , source_term.shape)
 
-        kappa = 1e-1
-        pde_loss = torch.mean( (u_x[:,0] + velocity_term - kappa * laplace_term - (source_term) )**2) 
+        assert u_x[:,0:1].shape ==velocity_term.shape == laplace_term.shape == source_term.shape
+        pde_loss = torch.mean( torch.square((u_x[:,0:1] + velocity_term - kappa * laplace_term - source_term) ))
+        # assert pde_loss.shape == (1,1)
         # pde_loss = torch.mean((u_x[:,0]  - 0.1 * laplace_term - (source_term) )**2) 
-        total_loss = pde_loss
+        total_loss = pde_loss + negative_loss*10
         # print(torch.mean(velocity_term**2),torch.mean(source_term**2),torch.mean(u_x[:,0]**2))
         return total_loss, pde_loss, 
     
