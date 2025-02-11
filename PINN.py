@@ -3,7 +3,12 @@ from Net import Net
 import torch
 import numpy as np
 import pandas as pd
+from Gaussian_Mixture import Gaussian_Mixture
 from sklearn.mixture import GaussianMixture
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if torch.cuda.is_available():
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
 class PINN:
     def __init__(self,hidden_structure):
         self.spatial_dim = 3
@@ -13,14 +18,16 @@ class PINN:
         self.l_scale = 1
         self.t_scale = 1
     
-    def set_location(self, source_locs, max_vals, source_values = None, sigma = .025):
+    def set_location(self, source_locs, max_vals, source_values = None, sigma = .025, trainable = False):
         self.source_locs = source_locs
         #figure out if there should be 3 individual scales, or just 1 across x,y,z
-        self.l_scale = 1#max(max_vals[1:])
+        self.l_scale = 1 #max(max_vals[1:])
         self.source_locs_scaled = source_locs / self.l_scale
-        self.t_scale = 1#max_vals[0]
+        self.t_scale = 1 #max_vals[0]
         self.t_max = max_vals[0]
 
+        self.source_mixture_hm = Gaussian_Mixture(source_locs,[[sigma]*self.spatial_dim for _ in range(len(source_values))],source_values,trainable)
+        self.q = self.source_mixture_hm.magnitude
         if source_values is not None:
             assert len(source_values) == len(source_values)
             self.q = source_values
@@ -57,18 +64,12 @@ class PINN:
     def source_points(self,n,sigma):
         torch.empty(0,4)
         source_inputs_ls = torch.empty(0,4)
-        source_values_ls = torch.empty(0,1)
         # uv_inputs_ls = torch.empty(0,2)
         for i in range(len(self.q)):
             
             if self.q[i] > .001:
                 rand_source = torch.tensor(np.tile(self.source_locs[i],(n,1)) + np.random.randn(n,3)*sigma)
-                source_stacked = torch.tensor(np.tile(self.source_locs[i],(n,1)))
-                diff = rand_source - source_stacked  # Shape: (n, m, d)
-                squared_distances = torch.sum(diff**2, dim=1)    # Shape: (n, m)
                 # Compute Gaussian source term
-                source_values = self.q[i] * torch.exp(-squared_distances / (2 * sigma**2)).float().view(-1,1)  # Shape: (n, m)
-                # rand_time = torch.rand(n,1)*self.t_scale  # Shape: (61,)
                 rand_time = torch.rand(n,1)*self.t_max # Shape: (61,)
 
                 source_inputs = torch.cat([rand_time,rand_source],dim=1)
@@ -77,12 +78,11 @@ class PINN:
                 # Concatenate space locations and time
                 # uv = torch.cat([torch.ones(len(source_inputs)).view(-1,1)*-1, torch.ones(len(source_inputs)).view(-1,1)*-1], dim=1)
                 source_inputs_ls= torch.cat([source_inputs_ls, source_inputs])
-                source_values_ls =torch.cat([source_values_ls, source_values])
                 # uv_inputs_ls = torch.cat([uv_inputs_ls,uv])
         return source_inputs_ls.float()
     
 
-    def loss_function(self, tx, wind_vector, source_term = None, scaled = False):
+    def compute_pde_loss(self, tx, wind_vector, source_term = None, scaled = False):
         # assumes v has shape (1, spatial_dim)
         # assumes source_loc has shape (1, spatial_dim)
         # assumes source_value is a scalar
@@ -91,13 +91,7 @@ class PINN:
 
         batch_size = tx.shape[0]
         spatial_dim =self.spatial_dim
-        # print('x.shape = ', x.shape)
-        # print('t.shape = ', t.shape)
-        # assert t.shape[0] == batch_size
 
-        # compute gradients
-        # x.requires_grad = True
-        # t.requires_grad = True
         tx.requires_grad_()
         u = self.net(tx)
         u_x = torch.autograd.grad(outputs=u, inputs=tx, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True, allow_unused=True)[0]
@@ -118,29 +112,38 @@ class PINN:
         assert laplace_term.shape == (batch_size, 1)
         assert velocity_term.shape == (batch_size, 1)
         # assert u_t.shape == (batch_size, 1)
+        source_term_hm = self.source_mixture_hm.evaluate(tx[:,1:]).view(batch_size,1)
+
+        # source_term_hm = torch.tensor(source_term.clone().detach().cpu().numpy())
 
         source_term = torch.tensor(np.exp(self.source_mixture.score_samples(tx[:,1:].detach().cpu().numpy()))).view(batch_size,1)
-        # print(source_term[0],tx[0])
-        # print('source_term.shape = ', source_term.shape)
-        # print('velocity_term.shape = ', velocity_term.shape)
-        # print('velocity_term + source_term shape = ', (velocity_term + source_term).shape)
+        print(self.source_mixture_hm.mean)
+        print(self.source_mixture_hm.st_dev)
+        print(self.source_mixture_hm.magnitude)
+        print(torch.cat([source_term_hm,source_term],dim=1))
+        # print( source_term[0,0] , source_term_hm[0,0])
+        assert source_term.shape == source_term_hm.shape
+        # print(tx[:,1:],source_term)
+        # source_term = torch.tensor(source_term.detach().cpu().numpy())
         assert source_term.shape == (batch_size, 1)
 
-        negative_loss = torch.mean((torch.abs(u) - u)**2)
-        # assert negative_loss.shape == (1,1)
         # compute loss
         assert u_x[:,0:1].shape == velocity_term.shape
         kappa = 1e-1
-        # print(u_x[:,0:1].shape ,velocity_term.shape , laplace_term.shape , source_term.shape)
-
+        # print(source_term)
         assert u_x[:,0:1].shape ==velocity_term.shape == laplace_term.shape == source_term.shape
+        # print(tx[-2])
         pde_loss = torch.mean( torch.square((u_x[:,0:1] + velocity_term - kappa * laplace_term - source_term) ))
-        # assert pde_loss.shape == (1,1)
-        # pde_loss = torch.mean((u_x[:,0]  - 0.1 * laplace_term - (source_term) )**2) 
-        total_loss = pde_loss + negative_loss*10
-        # print(torch.mean(velocity_term**2),torch.mean(source_term**2),torch.mean(u_x[:,0]**2))
-        return total_loss, pde_loss, 
+
+        total_loss = pde_loss
+        return total_loss, pde_loss 
     
+    def compute_data_loss(self,data,data_values):
+        assert data.shape == [len(data_values),self.spatial_dim+1]
+        assert len(data.shape) == 2
+        assert data_values.shape[1] == 1
+        torch.mean(torch.square(self.forward(data,False) - data_values))
+
     def train(self,num_epochs, initial_condition = None, collocation = None):
         if initial_condition == None:
             initial_condition = self.initial_condition_points
