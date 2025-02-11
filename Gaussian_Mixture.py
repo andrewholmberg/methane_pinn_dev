@@ -46,7 +46,7 @@ class Gaussian_Mixture:
 
         source_var = self.st_dev.repeat((len(x),1))
         assert source_var.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-        res = self.magnitude.repeat((len(x)))/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))
+        res = self.magnitude.repeat((len(x)))*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))
         # print(self.magnitude.repeat((len(x))).shape)
         # print((1/((2*torch.pi)**(self.spatial_dim/2)*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))).shape)
         # print(self.magnitude.repeat((len(x))))
@@ -55,10 +55,12 @@ class Gaussian_Mixture:
         assert res.view(-1,1).shape == (len(x)*self.num_gaussian,1)
         idx = torch.arange(0,len(res))
         filter = n * (idx % n) + idx//n
+        # print(res)
         grouped_tensor = res[filter].view(-1,self.num_gaussian,len(x)).sum(dim=1).view(-1,1)
-
+        # print(torch.square(x_tiled - source_pts)/(2*source_var**2))
+        # print(2*source_var**2)
         assert grouped_tensor.shape == (len(x),1)
-        print(grouped_tensor)
+        # print(grouped_tensor)
         return grouped_tensor
     '''
     def evaluate(self,x):
@@ -101,35 +103,40 @@ class Gaussian_Mixture:
 mean = np.array([[.3,.3,.3],[.25,.75,.5]])
 # var = [[1,1,1],[1,1,1],[1,1,1],[1,1,1],[1,1,1],[1,1,1],[1,1,1]]
 # magnitude = [1,1,1,1,1,1,1]
-var = [[.025,.025,.025],[.025,.025,.025]]
-magnitude = [0,1]
-gm = Gaussian_Mixture(mean,var,magnitude,trainable=False)
-tensor = torch.rand(2,3)*.025
-tensor = torch.rand(2,3)*.025+torch.tensor([.25,.75,.5])
-bt = time.time()
-x=gm.evaluate(tensor)
-et = time.time()
-print(et - bt)
-# print(x)
 
 
-sgm = GaussianMixture(len(mean),covariance_type='full')
-non_zero_idx = np.array(magnitude) > 0
-sgm.weights_=np.array(magnitude)[non_zero_idx]
-sgm.means_ = np.array(mean)[non_zero_idx]
-sgm.covariances_ = np.array([np.eye(3)*.025 for _ in range(len(mean))])[non_zero_idx]
-sgm.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(sgm.covariances_))
-source_term = torch.tensor(np.exp(sgm.score_samples(tensor.detach().cpu().numpy()))).view(tensor.shape[0],1)
-print(torch.mean(torch.abs(source_term - x)))
-print(torch.tensor([1,2,3,4])*torch.tensor([1,2,3,4]))
 
-print(torch.prod(torch.tensor([[1,2,3,4],[2,3,4,5]]),dim=1))
 
-res = torch.arange(0,12).view(4,3)
-print(res)
-n = 2
-idx = torch.arange(0,len(res))
-filter = n*(idx % n) + idx//n
-print(filter)
-print(res[filter].view(-1,3,n))
-print(res[filter].view(-1,3,n).sum(dim=1).sum(dim=1))
+# var = [[.025,.025,.025],[.025,.025,.025]]
+# magnitude = [0,1]
+# gm = Gaussian_Mixture(mean,var,magnitude,trainable=False)
+# tensor = torch.rand(2,3)*.025
+# tensor = torch.rand(2,3)*.025+torch.tensor([.25,.75,.5])
+# bt = time.time()
+# x=gm.evaluate(tensor)
+# et = time.time()
+# print(et - bt)
+# # print(x)
+
+
+# sgm = GaussianMixture(len(mean),covariance_type='full')
+# non_zero_idx = np.array(magnitude) > 0
+# sgm.weights_=np.array(magnitude)[non_zero_idx]
+# sgm.means_ = np.array(mean)[non_zero_idx]
+# sgm.covariances_ = np.array([np.eye(3)*.025 for _ in range(len(mean))])[non_zero_idx]
+# sgm.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(sgm.covariances_))
+# source_term = torch.tensor(np.exp(sgm.score_samples(tensor.detach().cpu().numpy()))).view(tensor.shape[0],1)
+# print(torch.mean(torch.abs(source_term - x)))
+# print(torch.tensor([1,2,3,4])*torch.tensor([1,2,3,4]))
+
+# print(torch.prod(torch.tensor([[1,2,3,4],[2,3,4,5]]),dim=1))
+
+# res = torch.arange(0,12).view(4,3)
+# print(res)
+# n = 2
+# idx = torch.arange(0,len(res))
+# filter = n*(idx % n) + idx//n
+# print(filter)
+# print(res[filter].view(-1,3,n))
+# print(res[filter].view(-1,3,n).sum(dim=1).sum(dim=1))
+

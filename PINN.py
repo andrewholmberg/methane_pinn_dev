@@ -112,17 +112,17 @@ class PINN:
         assert laplace_term.shape == (batch_size, 1)
         assert velocity_term.shape == (batch_size, 1)
         # assert u_t.shape == (batch_size, 1)
-        source_term_hm = self.source_mixture_hm.evaluate(tx[:,1:]).view(batch_size,1)
+        source_term = self.source_mixture_hm.evaluate(tx[:,1:]).view(batch_size,1)
+        print(source_term)
+        # source_term = torch.tensor(source_term.clone().detach().cpu().numpy())
 
-        # source_term_hm = torch.tensor(source_term.clone().detach().cpu().numpy())
-
-        source_term = torch.tensor(np.exp(self.source_mixture.score_samples(tx[:,1:].detach().cpu().numpy()))).view(batch_size,1)
-        print(self.source_mixture_hm.mean)
-        print(self.source_mixture_hm.st_dev)
-        print(self.source_mixture_hm.magnitude)
-        print(torch.cat([source_term_hm,source_term],dim=1))
+        # source_term = torch.tensor(np.exp(self.source_mixture.score_samples(tx[:,1:].detach().cpu().numpy()))).view(batch_size,1)
+        # print(self.source_mixture_hm.mean)
+        # print(self.source_mixture_hm.st_dev)
+        # print(self.source_mixture_hm.magnitude)
+        # print(torch.cat([source_term_hm,source_term],dim=1))
         # print( source_term[0,0] , source_term_hm[0,0])
-        assert source_term.shape == source_term_hm.shape
+        # assert source_term.shape == source_term_hm.shape
         # print(tx[:,1:],source_term)
         # source_term = torch.tensor(source_term.detach().cpu().numpy())
         assert source_term.shape == (batch_size, 1)
