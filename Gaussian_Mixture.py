@@ -36,28 +36,31 @@ class Gaussian_Mixture:
         else:
             self.magnitude = torch.rand(self.num_gaussian)
 
-    # def evaluate(self,x):
-    #     assert x.shape[1] == self.spatial_dim
-    #     x_tiled = torch.tile(x,(self.num_gaussian,1))
-    #     assert x_tiled.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-    #     source_pts = self.mean.repeat((len(x),1))
-    #     assert x_tiled.shape == (len(x)*self.num_gaussian,self.spatial_dim)
+    def evaluate(self,x):
+        n = len(x)
+        assert x.shape[1] == self.spatial_dim
+        x_tiled = torch.tile(x,(self.num_gaussian,1))
+        assert x_tiled.shape == (len(x)*self.num_gaussian,self.spatial_dim)
+        source_pts = self.mean.repeat((len(x),1))
+        assert x_tiled.shape == (len(x)*self.num_gaussian,self.spatial_dim)
 
-    #     source_var = self.st_dev.repeat((len(x),1))
-    #     assert source_var.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-    #     res = self.magnitude.repeat((len(x)))/((2*torch.pi)**(self.spatial_dim/2)*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))
-    #     # print(self.magnitude.repeat((len(x))).shape)
-    #     # print((1/((2*torch.pi)**(self.spatial_dim/2)*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))).shape)
-    #     # print(self.magnitude.repeat((len(x))))
-    #     # print((1/((2*torch.pi)**(self.spatial_dim/2)*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))))
-    #     # print(res)
-    #     print(x_tiled - source_pts)
-    #     assert res.view(-1,1).shape == (len(x)*self.num_gaussian,1)
-    #     grouped_tensor = res.view(-1,self.num_gaussian,len(x)).sum(dim=1).view(-1,1)
+        source_var = self.st_dev.repeat((len(x),1))
+        assert source_var.shape == (len(x)*self.num_gaussian,self.spatial_dim)
+        res = self.magnitude.repeat((len(x)))/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))
+        # print(self.magnitude.repeat((len(x))).shape)
+        # print((1/((2*torch.pi)**(self.spatial_dim/2)*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))).shape)
+        # print(self.magnitude.repeat((len(x))))
+        # print((1/((2*torch.pi)**(self.spatial_dim/2)*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))))
+        # print(res)
+        assert res.view(-1,1).shape == (len(x)*self.num_gaussian,1)
+        idx = torch.arange(0,len(res))
+        filter = n * (idx % n) + idx//n
+        grouped_tensor = res[filter].view(-1,self.num_gaussian,len(x)).sum(dim=1).view(-1,1)
 
-    #     assert grouped_tensor.shape == (len(x),1)
-    #     print(grouped_tensor)
-    #     return grouped_tensor
+        assert grouped_tensor.shape == (len(x),1)
+        print(grouped_tensor)
+        return grouped_tensor
+    '''
     def evaluate(self,x):
         assert x.shape[1] == self.spatial_dim
 
@@ -85,7 +88,7 @@ class Gaussian_Mixture:
 
         assert grouped_tensor.shape == (len(x), 1)
         return grouped_tensor
-
+    '''
 
 
 # gm = Gaussian_Mixture([[0,0,0],[1,1,1],[2,2,2]],[[1,1,1],[1,1,1],[1,1,1]])
@@ -119,3 +122,14 @@ sgm.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(sgm.covariances_))
 source_term = torch.tensor(np.exp(sgm.score_samples(tensor.detach().cpu().numpy()))).view(tensor.shape[0],1)
 print(torch.mean(torch.abs(source_term - x)))
 print(torch.tensor([1,2,3,4])*torch.tensor([1,2,3,4]))
+
+print(torch.prod(torch.tensor([[1,2,3,4],[2,3,4,5]]),dim=1))
+
+res = torch.arange(0,12).view(4,3)
+print(res)
+n = 2
+idx = torch.arange(0,len(res))
+filter = n*(idx % n) + idx//n
+print(filter)
+print(res[filter].view(-1,3,n))
+print(res[filter].view(-1,3,n).sum(dim=1).sum(dim=1))
