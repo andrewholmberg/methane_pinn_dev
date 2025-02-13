@@ -113,7 +113,7 @@ class PINN:
         assert velocity_term.shape == (batch_size, 1)
         # assert u_t.shape == (batch_size, 1)
         source_term = self.source_mixture_hm.evaluate(tx[:,1:]).view(batch_size,1)
-        print(source_term)
+        # print(source_term)
         # source_term = torch.tensor(source_term.clone().detach().cpu().numpy())
 
         # source_term = torch.tensor(np.exp(self.source_mixture.score_samples(tx[:,1:].detach().cpu().numpy()))).view(batch_size,1)
@@ -126,10 +126,10 @@ class PINN:
         # print(tx[:,1:],source_term)
         # source_term = torch.tensor(source_term.detach().cpu().numpy())
         assert source_term.shape == (batch_size, 1)
-
+        # print(source_term)
         # compute loss
         assert u_x[:,0:1].shape == velocity_term.shape
-        kappa = 1e-1
+        kappa = 1*1e-3
         # print(source_term)
         assert u_x[:,0:1].shape ==velocity_term.shape == laplace_term.shape == source_term.shape
         # print(tx[-2])
@@ -137,7 +137,9 @@ class PINN:
 
         total_loss = pde_loss
         return total_loss, pde_loss 
-    
+    def compute_negative_loss(self,points):
+        u = self.forward(points)
+        return torch.mean((torch.abs(u)-u)**2)
     def compute_data_loss(self,data,data_values):
         assert data.shape == [len(data_values),self.spatial_dim+1]
         assert len(data.shape) == 2
