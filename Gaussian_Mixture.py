@@ -25,14 +25,12 @@ class Gaussian_Mixture:
         self.spatial_dim = mean.shape[1]
         self.num_gaussian = len(mean)
         if trainable and magnitude is None:
-            # self.magnitude = nn.Parameter(torch.rand(self.num_gaussian))
-            self.magnitude =torch.rand(self.num_gaussian)
+            self.magnitude = nn.Parameter(torch.rand(self.num_gaussian))
 
         elif not trainable and not magnitude is None:
             self.magnitude = magnitude
         elif trainable and not magnitude is None:
-            # self.magnitude = nn.Parameter(magnitude)
-            self.magnitude = torch.tensor(magnitude)
+            self.magnitude = nn.Parameter(magnitude)
         else:
             self.magnitude = torch.rand(self.num_gaussian)
 
@@ -70,7 +68,25 @@ class Gaussian_Mixture:
             # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_var**2),dim=1))
             res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_var**2),dim=1))
             base += res.view(-1,1)
-        return base         
+        return base
+
+
+    def evaluate_constant_height(self,x):
+        n = len(x)
+        assert x.shape[1] == self.spatial_dim
+        base = torch.zeros(n,1)
+        # print(self.magnitude)
+        for i in range(self.num_gaussian):
+            source_pts = self.mean[i].view(1,-1).repeat((len(x),1))
+            source_var = self.st_dev[i].view(1,-1).repeat((len(x),1))
+            assert source_pts.shape == x.shape
+            # assert source_var.shape == (len(x)*self.num_gaussian,self.spatial_dim)
+            assert source_var.shape == source_pts.shape
+            assert source_var.shape == (n,self.spatial_dim)
+            # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_var**2),dim=1))
+            res = self.magnitude[i]*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_var**2),dim=1))
+            base += res.view(-1,1)
+        return base
     '''
     def evaluate(self,x):
         assert x.shape[1] == self.spatial_dim

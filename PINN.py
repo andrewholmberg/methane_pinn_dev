@@ -112,7 +112,7 @@ class PINN:
         assert laplace_term.shape == (batch_size, 1)
         assert velocity_term.shape == (batch_size, 1)
         # assert u_t.shape == (batch_size, 1)
-        source_term = self.source_mixture_hm.evaluate(tx[:,1:]).view(batch_size,1)
+        source_term = self.source_mixture_hm.evaluate_constant_height(tx[:,1:]).view(batch_size,1)
         # print(source_term)
         # source_term = torch.tensor(source_term.clone().detach().cpu().numpy())
 
