@@ -18,7 +18,7 @@ class PINN:
         self.l_scale = 1
         self.t_scale = 1
     
-    def set_location(self, source_locs, max_vals, source_values = None, sigma = .025, trainable = False):
+    def set_location(self, source_locs, max_vals, source_values = None, kappa = 1e-2, sigma = .025, trainable = False):
         self.source_locs = source_locs
         #figure out if there should be 3 individual scales, or just 1 across x,y,z
         self.l_scale = 1 #max(max_vals[1:])
@@ -140,11 +140,13 @@ class PINN:
     def compute_negative_loss(self,points):
         u = self.forward(points)
         return torch.mean((torch.abs(u)-u)**2)
+    
     def compute_data_loss(self,data,data_values):
-        assert data.shape == [len(data_values),self.spatial_dim+1]
+
+        assert data.shape == (data_values.shape[0],self.spatial_dim+1)
         assert len(data.shape) == 2
         assert data_values.shape[1] == 1
-        torch.mean(torch.square(self.forward(data,False) - data_values))
+        return torch.mean(torch.square(self.forward(data,False) - data_values))
 
     def train(self,num_epochs, initial_condition = None, collocation = None):
         if initial_condition == None:

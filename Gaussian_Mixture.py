@@ -69,10 +69,6 @@ class Gaussian_Mixture:
             assert source_var.shape == (n,self.spatial_dim)
             # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_var**2),dim=1))
             res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_var**2),dim=1))
-
-            # assert res.view(-1,1).shape == (len(x)*self.num_gaussian,1)            base += res.view(-1,1) 
-            # print('res:')
-            # print(res.view(-1,1))
             base += res.view(-1,1)
         return base         
     '''
