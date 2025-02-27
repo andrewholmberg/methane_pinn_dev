@@ -10,4 +10,4 @@ def convert_wind(magnitude,direction,degrees=True):
         direction = direction/(180)*pi
     return magnitude * cos(direction), magnitude*sin(direction)
 
-print(convert_wind(1,45))
+# print(convert_wind(1,45))

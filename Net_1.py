@@ -34,5 +34,4 @@ class Net(torch.nn.Module):
 
         # ensures at t=0, the output is zero
         xt = t*xt
-        print(xt.shape)
         return xt

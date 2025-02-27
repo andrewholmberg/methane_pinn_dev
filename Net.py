@@ -42,6 +42,7 @@ class Net(torch.nn.Module):
         # ensures at t=0, the output is zero
         xt = t*xt
         return xt
+
     '''
     # create loss for  \|u_t - u_xx = 0\|
 
