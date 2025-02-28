@@ -3,10 +3,16 @@ import time
 from torch import nn
 from sklearn.mixture import GaussianMixture
 import numpy as np
-
+torch.set_printoptions(precision=8)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available():
     torch.set_default_tensor_type(torch.cuda.FloatTensor)
+
+
+def smooth_clamp(x, min_val, max_val, beta=10):
+    return min_val + torch.nn.functional.softplus(x - min_val, beta) - torch.nn.functional.softplus(x - max_val, beta)
+
+
 class Gaussian_Mixture:
 
     def __init__(self,mean, st_dev, magnitude = None, trainable = True):
@@ -25,57 +31,62 @@ class Gaussian_Mixture:
         self.spatial_dim = mean.shape[1]
         self.num_gaussian = len(mean)
         if trainable and magnitude is None:
-            self.magnitude = nn.Parameter(torch.rand(self.num_gaussian),requires_grad=True)
+            self.magnitude = nn.Parameter(torch.rand(self.num_gaussian,requires_grad=True).float())
 
         elif not trainable and not magnitude is None:
-            self.magnitude = magnitude
+            self.magnitude = magnitude.float()
         elif trainable and not magnitude is None:
-            self.magnitude = nn.Parameter(torch.tensor(magnitude,requires_grad=True))
+            self.magnitude = nn.Parameter(torch.tensor(magnitude,requires_grad=True).float())
         else:
-            self.magnitude = torch.rand(self.num_gaussian)
+            self.magnitude = torch.rand(self.num_gaussian).float()
 
 
     
-    # def evaluate(self,x):
-    #     n = len(x)
-    #     assert x.shape[1] == self.spatial_dim
-    #     base = torch.zeros(n,1)
-    #     # print(self.magnitude)
-    #     for i in range(self.num_gaussian):
-    #         source_pts = self.mean[i].view(1,-1).repeat((len(x),1))
-    #         source_var = self.st_dev[i].view(1,-1).repeat((len(x),1))
-    #         assert source_pts.shape == x.shape
-    #         # assert source_var.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-    #         assert source_var.shape == source_pts.shape
-    #         assert source_var.shape == (n,self.spatial_dim)
-    #         # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_var**2),dim=1))
-    #         res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_var**2),dim=1))
-    #         base += res.view(-1,1)
-    #     return base
-
-
-    def evaluate(self, x):
-        n = x.shape[0]
+    def evaluate(self,x):
+        n = len(x)
         assert x.shape[1] == self.spatial_dim
+        base = torch.zeros(n,1)
+        # print(self.magnitude)
+        tensor = torch.zeros(n,self.num_gaussian).float()
+        for i in range(self.num_gaussian):
+            source_pts = self.mean[i].view(1,-1).repeat((len(x),1))
+            source_stdev = self.st_dev[i].view(1,-1).repeat((len(x),1))
+            assert source_pts.shape == x.shape
+            # assert source_stdev.shape == (len(x)*self.num_gaussian,self.spatial_dim)
+            assert source_stdev.shape == source_pts.shape
+            assert source_stdev.shape == (n,self.spatial_dim)
+            # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_stdev**2),dim=1))
+            res = 1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))
+            tensor[:,i] = res
+            # print(source_stdev)
+            # print(torch.max(torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))))
+        toret = (torch.clamp(self.magnitude,0,10) @ torch.transpose(tensor.float(),0,1)).view(-1,1)
+        # print(torch.max(toret))
+        return toret
 
-        # Reshape mean and st_dev to enable broadcasting
-        source_pts = self.mean.view(self.num_gaussian, 1, -1)  # (num_gaussian, 1, spatial_dim)
-        source_var = self.st_dev.view(self.num_gaussian, 1, -1)  # (num_gaussian, 1, spatial_dim)
 
-        # Gaussian normalization factor (per Gaussian component)
-        norm_factor = 1 / (((2 * torch.pi) ** (self.spatial_dim / 2)) * torch.prod(source_var, dim=2, keepdim=True))  # (num_gaussian, 1)
+    # def evaluate(self, x):
+    #     n = x.shape[0]
+    #     assert x.shape[1] == self.spatial_dim
 
-        # Compute squared difference and exponent term
-        diff = x.unsqueeze(0) - source_pts  # (num_gaussian, n, spatial_dim)
-        exp_term = torch.exp(-torch.sum(diff**2 / (2 * source_var**2), dim=2, keepdim=True))  # (num_gaussian, n, 1)
-        print(torch.max(exp_term))
-        # Compute Gaussian mixture output
-        res = (self.magnitude.view(-1, 1, 1) * norm_factor * exp_term)  # (num_gaussian, n, 1)
+    #     # Reshape mean and st_dev to enable broadcasting
+    #     source_pts = self.mean.view(self.num_gaussian, 1, -1)  # (num_gaussian, 1, spatial_dim)
+    #     source_stdev = self.st_dev.view(self.num_gaussian, 1, -1)  # (num_gaussian, 1, spatial_dim)
 
-        # Sum over all Gaussians and reshape for output
-        base = res.sum(dim=0)  # (n, 1)
+    #     # Gaussian normalization factor (per Gaussian component)
+    #     norm_factor = 1 / (((2 * torch.pi) ** (self.spatial_dim / 2)) * torch.prod(source_stdev, dim=2, keepdim=True))  # (num_gaussian, 1)
 
-        return base
+    #     # Compute squared difference and exponent term
+    #     diff = x.unsqueeze(0) - source_pts  # (num_gaussian, n, spatial_dim)
+    #     exp_term = torch.exp(-torch.sum(diff**2 / (2 * source_stdev**2), dim=2, keepdim=True))  # (num_gaussian, n, 1)
+    #     print(torch.max(exp_term))
+    #     # Compute Gaussian mixture output
+    #     res = (self.magnitude.view(-1, 1, 1) * norm_factor * exp_term)  # (num_gaussian, n, 1)
+
+    #     # Sum over all Gaussians and reshape for output
+    #     base = res.sum(dim=0)  # (n, 1)
+
+    #     return base
 
 
 
@@ -87,9 +98,9 @@ class Gaussian_Mixture:
         source_pts = self.mean.repeat((len(x),1))
         assert x_tiled.shape == (len(x)*self.num_gaussian,self.spatial_dim)
 
-        source_var = self.st_dev.repeat((len(x),1))
-        assert source_var.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-        res = self.magnitude.repeat((len(x)))*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_var**2),dim=1))
+        source_stdev = self.st_dev.repeat((len(x),1))
+        assert source_stdev.shape == (len(x)*self.num_gaussian,self.spatial_dim)
+        res = self.magnitude.repeat((len(x)))*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_stdev**2),dim=1))
         assert res.view(-1,1).shape == (len(x)*self.num_gaussian,1)
         idx = torch.arange(0,len(res))
         filter = self.num_gaussian * (idx % n) + idx//n
@@ -109,13 +120,13 @@ class Gaussian_Mixture:
         # print(self.magnitude)
         for i in range(self.num_gaussian):
             source_pts = self.mean[i].view(1,-1).repeat((len(x),1))
-            source_var = self.st_dev[i].view(1,-1).repeat((len(x),1))
+            source_stdev = self.st_dev[i].view(1,-1).repeat((len(x),1))
             assert source_pts.shape == x.shape
-            # assert source_var.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-            assert source_var.shape == source_pts.shape
-            assert source_var.shape == (n,self.spatial_dim)
-            # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_var,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_var**2),dim=1))
-            res = self.magnitude[i]*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_var**2),dim=1))
+            # assert source_stdev.shape == (len(x)*self.num_gaussian,self.spatial_dim)
+            assert source_stdev.shape == source_pts.shape
+            assert source_stdev.shape == (n,self.spatial_dim)
+            # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_stdev**2),dim=1))
+            res = self.magnitude[i]*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))
             base += res.view(-1,1)
         return base
     '''
@@ -128,15 +139,15 @@ class Gaussian_Mixture:
 
         # Correctly repeat the means and variances
         source_pts = self.mean.repeat_interleave(len(x), dim=0)
-        source_var = self.st_dev.repeat_interleave(len(x), dim=0)
+        source_stdev = self.st_dev.repeat_interleave(len(x), dim=0)
 
         assert source_pts.shape == x_tiled.shape
-        assert source_var.shape == x_tiled.shape
+        assert source_stdev.shape == x_tiled.shape
 
         # Compute the Gaussian PDF component-wise
         res = self.magnitude.repeat(len(x)) / (
-            (2 * torch.pi) ** (self.spatial_dim / 2) * torch.prod(source_var, dim=1)
-        ) * torch.exp(-torch.sum(torch.square(x_tiled - source_pts) / (2 * source_var**2), dim=1))
+            (2 * torch.pi) ** (self.spatial_dim / 2) * torch.prod(source_stdev, dim=1)
+        ) * torch.exp(-torch.sum(torch.square(x_tiled - source_pts) / (2 * source_stdev**2), dim=1))
 
         # Reshape to match the grouping
         res = res.view(len(x), self.num_gaussian)

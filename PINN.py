@@ -44,13 +44,13 @@ class PINN:
         self.collocation_points = collocation_points
 
     def forward(self,input_tensor,scaled=False):
-        if scaled:
-            return self.net(input_tensor)
-        else:
-            temp = input_tensor.clone()
-            temp[:,1:] = temp[:,1:]/self.l_scale
-            temp[:,0] = temp[:,0]/self.t_scale
-            return self.net(temp)
+        # if scaled:
+        #     return self.net(input_tensor)
+        # else:
+        #     temp = input_tensor.clone()
+        #     temp[:,1:] = temp[:,1:]/self.l_scale
+        #     temp[:,0] = temp[:,0]/self.t_scale
+        return self.net(input_tensor)
 
     def scale_tensor(self, loc_tensor, wind_tensor = None):
         loc_temp = loc_tensor.clone()
@@ -65,9 +65,9 @@ class PINN:
         torch.empty(0,4)
         source_inputs_ls = torch.empty(0,4)
         # uv_inputs_ls = torch.empty(0,2)
-        for i in range(len(self.q)):
+        for i in range(len(self.source_mixture_hm.magnitude)):
             
-            if self.q[i] > .001:
+            if self.source_mixture_hm.magnitude[i] > .001:
                 rand_source = torch.tensor(np.tile(self.source_locs[i],(n,1)) + np.random.randn(n,3)*sigma)
                 # Compute Gaussian source term
                 rand_time = torch.rand(n,1)*self.t_max # Shape: (61,)
@@ -113,24 +113,11 @@ class PINN:
         assert velocity_term.shape == (batch_size, 1)
         # assert u_t.shape == (batch_size, 1)
         source_term = self.source_mixture_hm.evaluate(tx[:,1:]).view(batch_size,1)
-        # print(torch.max(source_term))
-        # print(source_term)
-        # source_term = torch.tensor(source_term.clone().detach().cpu().numpy())
 
-        # source_term = torch.tensor(np.exp(self.source_mixture.score_samples(tx[:,1:].detach().cpu().numpy()))).view(batch_size,1)
-        # print(self.source_mixture_hm.mean)
-        # print(self.source_mixture_hm.st_dev)
-        # print(self.source_mixture_hm.magnitude)
-        # print(torch.cat([source_term_hm,source_term],dim=1))
-        # print( source_term[0,0] , source_term_hm[0,0])
-        # assert source_term.shape == source_term_hm.shape
-        # print(tx[:,1:],source_term)
-        # source_term = torch.tensor(source_term.detach().cpu().numpy())
         assert source_term.shape == (batch_size, 1)
-        # print(source_term)
         # compute loss
         assert u_x[:,0:1].shape == velocity_term.shape
-        kappa = 1*1e-3
+        kappa = 1*1e-2
         # print(source_term)
         assert u_x[:,0:1].shape ==velocity_term.shape == laplace_term.shape == source_term.shape
         # print(tx[-2])

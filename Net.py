@@ -40,7 +40,7 @@ class Net(torch.nn.Module):
         xt = self.hidden[-1](xt)
         # ensures at t=0, the output is zero
         # ensures at t=0, the output is zero
-        xt = t*xt
+        # xt = t*xt
         return xt
 
     '''
