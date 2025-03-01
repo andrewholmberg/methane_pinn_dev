@@ -113,11 +113,12 @@ class Gaussian_Mixture:
 
 
 
-    def evaluate_constant_height(self,x):
+    def evaluate(self,x):
         n = len(x)
         assert x.shape[1] == self.spatial_dim
         base = torch.zeros(n,1)
         # print(self.magnitude)
+        tensor = torch.zeros(n,self.num_gaussian).float()
         for i in range(self.num_gaussian):
             source_pts = self.mean[i].view(1,-1).repeat((len(x),1))
             source_stdev = self.st_dev[i].view(1,-1).repeat((len(x),1))
@@ -126,9 +127,13 @@ class Gaussian_Mixture:
             assert source_stdev.shape == source_pts.shape
             assert source_stdev.shape == (n,self.spatial_dim)
             # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_stdev**2),dim=1))
-            res = self.magnitude[i]*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))
-            base += res.view(-1,1)
-        return base
+            res = torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))
+            tensor[:,i] = res
+            # print(source_stdev)
+            # print(torch.max(torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))))
+        toret = (torch.clamp(self.magnitude,0,10) @ torch.transpose(tensor.float(),0,1)).view(-1,1)
+        # print(torch.max(toret))
+        return toret
     '''
     def evaluate(self,x):
         assert x.shape[1] == self.spatial_dim

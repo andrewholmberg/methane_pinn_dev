@@ -21,10 +21,11 @@ class PINN:
     def set_location(self, source_locs, max_vals, source_values = None, kappa = 1e-2, sigma = .025, trainable = False):
         self.source_locs = source_locs
         #figure out if there should be 3 individual scales, or just 1 across x,y,z
-        self.l_scale = 1 #max(max_vals[1:])
+        self.l_scale = max(max_vals[1:])
         self.source_locs_scaled = source_locs / self.l_scale
-        self.t_scale = 1 #max_vals[0]
+        self.t_scale = max_vals[0]
         self.t_max = max_vals[0]
+        print(self.l_scale)
 
         self.source_mixture_hm = Gaussian_Mixture(source_locs,[[sigma]*self.spatial_dim for _ in range(len(source_values))],source_values,trainable)
         self.q = self.source_mixture_hm.magnitude
@@ -44,12 +45,12 @@ class PINN:
         self.collocation_points = collocation_points
 
     def forward(self,input_tensor,scaled=False):
-        # if scaled:
-        #     return self.net(input_tensor)
-        # else:
-        #     temp = input_tensor.clone()
-        #     temp[:,1:] = temp[:,1:]/self.l_scale
-        #     temp[:,0] = temp[:,0]/self.t_scale
+        if scaled:
+            return self.net(input_tensor)
+        else:
+            temp = input_tensor.clone()
+            temp[:,1:] = temp[:,1:]/self.l_scale
+            temp[:,0] = temp[:,0]/self.t_scale
         return self.net(input_tensor)
 
     def scale_tensor(self, loc_tensor, wind_tensor = None):
@@ -96,7 +97,9 @@ class PINN:
         u = self.net(tx)
         u_x = torch.autograd.grad(outputs=u, inputs=tx, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True, allow_unused=True)[0]
         u_xx = torch.autograd.grad(outputs=u_x, inputs=tx, grad_outputs=torch.ones_like(u_x), create_graph=True, retain_graph=True, allow_unused=True)[0]
-        
+        u_x[:,1:] *= 1/self.l_scale
+        u_xx *= 1/self.l_scale**2
+        u_x[:,0:1] *= 1/self.t_scale
         assert u.shape == (batch_size,1)
 
         # u_t = torch.autograd.grad(outputs=u, inputs=t, grad_outputs=torch.ones_like(u), create_graph=True, retain_graph=True)[0]
