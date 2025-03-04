@@ -3,18 +3,27 @@ import time
 from torch import nn
 from sklearn.mixture import GaussianMixture
 import numpy as np
+
 torch.set_printoptions(precision=8)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available():
     torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
 
-def smooth_clamp(x, min_val, max_val, beta=10):
-    return min_val + torch.nn.functional.softplus(x - min_val, beta) - torch.nn.functional.softplus(x - max_val, beta)
-
-
+'''
+Class Gaussian_Mixture
+description: approximate source delta function with a gaussian. Takes source locations (mean), standard deviations for the gaussians,
+    and magnitudes to indicate how much a source is emitting.
+'''
 class Gaussian_Mixture:
-
+    '''
+    function __init__ - constructor.
+    @param mean - the locations of the sources
+    @param st_dev - the standard deviations of the sources
+    @param magnitude - height / scale of the gaussians - higher value indicates more emission.
+    @param trainable - whether or not the magnitudes are trainable. self.magnitude is param tensor if true, else normal tensor.
+    @return - None
+    '''
     def __init__(self,mean, st_dev, magnitude = None, trainable = True):
         mean = torch.tensor(mean)
         st_dev = torch.tensor(st_dev)
@@ -41,7 +50,12 @@ class Gaussian_Mixture:
             self.magnitude = torch.rand(self.num_gaussian).float()
 
 
-    
+    '''
+    function evaluate - evaluate the gaussian mixture at a given point(s). evaluate point at each of the gaussian
+        distributions, then add them all up
+    @param x - tensor of (n,3) points to evaluate the gaussians
+    @return - toret tensor of (n,1) with the combined source values.
+    '''
     def evaluate(self,x):
         n = len(x)
         assert x.shape[1] == self.spatial_dim
@@ -58,68 +72,29 @@ class Gaussian_Mixture:
             # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_stdev**2),dim=1))
             res = 1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))
             tensor[:,i] = res
-            # print(source_stdev)
-            # print(torch.max(torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))))
+
         toret = (torch.clamp(self.magnitude,0,10) @ torch.transpose(tensor.float(),0,1)).view(-1,1)
         # print(torch.max(toret))
         return toret
 
 
-    # def evaluate(self, x):
-    #     n = x.shape[0]
-    #     assert x.shape[1] == self.spatial_dim
 
-    #     # Reshape mean and st_dev to enable broadcasting
-    #     source_pts = self.mean.view(self.num_gaussian, 1, -1)  # (num_gaussian, 1, spatial_dim)
-    #     source_stdev = self.st_dev.view(self.num_gaussian, 1, -1)  # (num_gaussian, 1, spatial_dim)
-
-    #     # Gaussian normalization factor (per Gaussian component)
-    #     norm_factor = 1 / (((2 * torch.pi) ** (self.spatial_dim / 2)) * torch.prod(source_stdev, dim=2, keepdim=True))  # (num_gaussian, 1)
-
-    #     # Compute squared difference and exponent term
-    #     diff = x.unsqueeze(0) - source_pts  # (num_gaussian, n, spatial_dim)
-    #     exp_term = torch.exp(-torch.sum(diff**2 / (2 * source_stdev**2), dim=2, keepdim=True))  # (num_gaussian, n, 1)
-    #     print(torch.max(exp_term))
-    #     # Compute Gaussian mixture output
-    #     res = (self.magnitude.view(-1, 1, 1) * norm_factor * exp_term)  # (num_gaussian, n, 1)
-
-    #     # Sum over all Gaussians and reshape for output
-    #     base = res.sum(dim=0)  # (n, 1)
-
-    #     return base
-
-
-
-    def evaluate_wip(self,x):
-        n = len(x)
-        assert x.shape[1] == self.spatial_dim
-        x_tiled = torch.tile(x,(self.num_gaussian,1))
-        assert x_tiled.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-        source_pts = self.mean.repeat((len(x),1))
-        assert x_tiled.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-
-        source_stdev = self.st_dev.repeat((len(x),1))
-        assert source_stdev.shape == (len(x)*self.num_gaussian,self.spatial_dim)
-        res = self.magnitude.repeat((len(x)))*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(-torch.sum(torch.square(x_tiled - source_pts)/(2*source_stdev**2),dim=1))
-        assert res.view(-1,1).shape == (len(x)*self.num_gaussian,1)
-        idx = torch.arange(0,len(res))
-        filter = self.num_gaussian * (idx % n) + idx//n
-        grouped_tensor = res[filter].view(-1,self.num_gaussian,len(x)).sum(dim=1).view(-1,1)
-
-        assert grouped_tensor.shape == (len(x),1)
-        return grouped_tensor
-
-
-
-
-
-    def evaluate(self,x):
+    '''
+    function evaluate_constant_height - evaluate the gaussian mixture at a given point(s). evaluate point at each of the gaussian
+        distributions, then add them all up. IN THIS CASE, disregard constant in front of the exponent of the gaussian.
+        Only evaluate the exponent part of the formula, then multiply by magnitude and add.
+    @param x - tensor of (n,3) points to evaluate the gaussians
+    @return - toret tensor of (n,1) with the combined source values.
+    '''
+    def evaluate_constant_height(self,x):
         n = len(x)
         assert x.shape[1] == self.spatial_dim
         base = torch.zeros(n,1)
         # print(self.magnitude)
         tensor = torch.zeros(n,self.num_gaussian).float()
+        '''for each source:'''
         for i in range(self.num_gaussian):
+            '''take location of that source'''
             source_pts = self.mean[i].view(1,-1).repeat((len(x),1))
             source_stdev = self.st_dev[i].view(1,-1).repeat((len(x),1))
             assert source_pts.shape == x.shape
@@ -129,40 +104,31 @@ class Gaussian_Mixture:
             # res = self.magnitude[i]*1/(((2*torch.pi)**(self.spatial_dim/2))*torch.prod(source_stdev,dim=1))*torch.exp(-torch.sum(torch.square(x - source_pts)/(2*source_stdev**2),dim=1))
             res = torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))
             tensor[:,i] = res
-            # print(source_stdev)
-            # print(torch.max(torch.exp(torch.sum(-(x - source_pts)**2/(2*source_stdev**2),dim=1))))
+        '''multiply gaussians by magnitudes. Need matrix multiplication for autograd to pick up.'''
         toret = (torch.clamp(self.magnitude,0,10) @ torch.transpose(tensor.float(),0,1)).view(-1,1)
         # print(torch.max(toret))
         return toret
+    
     '''
-    def evaluate(self,x):
-        assert x.shape[1] == self.spatial_dim
-
-        # Correctly tile x along the rows
-        x_tiled = x.repeat((self.num_gaussian, 1))
-        assert x_tiled.shape == (len(x) * self.num_gaussian, self.spatial_dim)
-
-        # Correctly repeat the means and variances
-        source_pts = self.mean.repeat_interleave(len(x), dim=0)
-        source_stdev = self.st_dev.repeat_interleave(len(x), dim=0)
-
-        assert source_pts.shape == x_tiled.shape
-        assert source_stdev.shape == x_tiled.shape
-
-        # Compute the Gaussian PDF component-wise
-        res = self.magnitude.repeat(len(x)) / (
-            (2 * torch.pi) ** (self.spatial_dim / 2) * torch.prod(source_stdev, dim=1)
-        ) * torch.exp(-torch.sum(torch.square(x_tiled - source_pts) / (2 * source_stdev**2), dim=1))
-
-        # Reshape to match the grouping
-        res = res.view(len(x), self.num_gaussian)
-
-        # Sum the Gaussian contributions
-        grouped_tensor = res.sum(dim=1).view(-1, 1)
-
-        assert grouped_tensor.shape == (len(x), 1)
-        return grouped_tensor
+    function source_points - generate sample points around each non-zero source.
+    @param n - number of points per source
+    @param t_max - maximum value of t to include in samples.
     '''
+    def source_points(self,n,t_max):
+        source_inputs_ls = torch.empty(0,4)
+        # for each source
+        for i in range(len(self.magnitude)):
+            if self.magnitude[i] > .000001:
+                #was using numpy's tile, but apparently torch broadcasting does it automatically.
+                rand_source = self.mean[i] + torch.randn(n, 3, device=self.mean.device) * self.st_dev[i]
+                #generate random time values
+                rand_time = torch.rand(n,1)*t_max # Shape: (61,)
+                #combine time and random source points
+                source_inputs = torch.cat([rand_time,rand_source],dim=1)
+                #add points of this source to what we are returning. 
+                source_inputs_ls= torch.cat([source_inputs_ls, source_inputs])
+
+        return source_inputs_ls.float()
 
 
 # gm = Gaussian_Mixture([[0,0,0],[1,1,1],[2,2,2]],[[1,1,1],[1,1,1],[1,1,1]])

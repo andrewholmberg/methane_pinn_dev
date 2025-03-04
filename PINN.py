@@ -25,19 +25,9 @@ class PINN:
         self.source_locs_scaled = source_locs / self.l_scale
         self.t_scale = max_vals[0]
         self.t_max = max_vals[0]
-        print(self.l_scale)
-
-        self.source_mixture_hm = Gaussian_Mixture(source_locs,[[sigma]*self.spatial_dim for _ in range(len(source_values))],source_values,trainable)
-        self.q = self.source_mixture_hm.magnitude
         if source_values is not None:
-            assert len(source_values) == len(source_values)
-            self.q = source_values
-            self.source_mixture = GaussianMixture(len(source_locs),covariance_type='full')
-            non_zero_idx = np.array(source_values) > 0
-            self.source_mixture.weights_=np.array(source_values)[non_zero_idx]
-            self.source_mixture.means_ = np.array(source_locs)[non_zero_idx]
-            self.source_mixture.covariances_ = np.array([np.eye(3)*sigma for _ in range(len(source_values))])[non_zero_idx]
-            self.source_mixture.precisions_cholesky_ = np.linalg.cholesky(np.linalg.inv(self.source_mixture.covariances_))
+            self.source_mixture_hm = Gaussian_Mixture(self.source_locs_scaled,[[sigma]*self.spatial_dim for _ in range(len(source_values))],source_values,trainable)
+            self.q = self.source_mixture_hm.magnitude
         else:
             self.q = [0] * len(source_locs)
 
@@ -58,29 +48,11 @@ class PINN:
         loc_temp[:,1:] = loc_temp[:,1:]/self.l_scale
         loc_temp[:,0] = loc_temp[:,0]/self.t_scale
         if wind_tensor != None:
-            wind_temp = wind_tensor.clone()*self.t_scale/self.l_scale
+            wind_temp = wind_tensor.clone()/self.l_scale/self.t_scale
         return loc_temp, wind_temp
 
 
-    def source_points(self,n,sigma):
-        torch.empty(0,4)
-        source_inputs_ls = torch.empty(0,4)
-        # uv_inputs_ls = torch.empty(0,2)
-        for i in range(len(self.source_mixture_hm.magnitude)):
-            
-            if self.source_mixture_hm.magnitude[i] > .001:
-                rand_source = torch.tensor(np.tile(self.source_locs[i],(n,1)) + np.random.randn(n,3)*sigma)
-                # Compute Gaussian source term
-                rand_time = torch.rand(n,1)*self.t_max # Shape: (61,)
 
-                source_inputs = torch.cat([rand_time,rand_source],dim=1)
-                # Repeat space locations for each time step
-                # Repeat time steps for each space location
-                # Concatenate space locations and time
-                # uv = torch.cat([torch.ones(len(source_inputs)).view(-1,1)*-1, torch.ones(len(source_inputs)).view(-1,1)*-1], dim=1)
-                source_inputs_ls= torch.cat([source_inputs_ls, source_inputs])
-                # uv_inputs_ls = torch.cat([uv_inputs_ls,uv])
-        return source_inputs_ls.float()
     
 
     def compute_pde_loss(self, tx, wind_vector, source_term = None, scaled = False):
@@ -115,7 +87,7 @@ class PINN:
         assert laplace_term.shape == (batch_size, 1)
         assert velocity_term.shape == (batch_size, 1)
         # assert u_t.shape == (batch_size, 1)
-        source_term = self.source_mixture_hm.evaluate(tx[:,1:]).view(batch_size,1)
+        source_term = self.source_mixture_hm.evaluate_constant_height(tx[:,1:]).view(batch_size,1)
 
         assert source_term.shape == (batch_size, 1)
         # compute loss
